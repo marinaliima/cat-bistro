@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Node-Cat Bistro 🐾 | Servidor Kawaii</title>
+  <style>
+    :root {
+      --bg-pink: #fff0f5;
+      --card-bg: #fff;
+      --pastel-pink: #ffb7b2;
+      --pastel-green: #b5ead7;
+      --pastel-yellow: #ffdac1;
+      --pastel-purple: #c7ceea;
+      --text-color: #6c5b7b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Fredoka', 'Comic Sans MS', 'Segoe UI', cursive, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-pink);
+      color: var(--text-color);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    #game-wrapper {
+      position: relative;
+      border: 6px solid var(--pastel-pink);
+      box-shadow: 0 10px 30px rgba(255, 183, 178, 0.4);
+      border-radius: 20px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    canvas {
+      display: block;
+      background: linear-gradient(to bottom, #fff5f7, #f0f4ff);
+    }
+
+    .controls-hint {
+      display: flex;
+      justify-content: space-around;
+      background: #fff;
+      border-top: 3px dashed var(--pastel-pink);
+      padding: 12px;
+      width: 800px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: #77628c;
+    }
+
+    .key {
+      background: var(--pastel-yellow);
+      border: 2px solid #f6b98e;
+      color: #5c4568;
+      padding: 3px 8px;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+
+    .modal-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 240, 245, 0.92);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 30px;
+      z-index: 10;
+    }
+
+    .modal-overlay h1 {
+      font-size: 2.3rem;
+      color: #ff6b8b;
+      margin-bottom: 12px;
+    }
+
+    .modal-overlay p {
+      max-width: 580px;
+      line-height: 1.6;
+      font-size: 1rem;
+      color: #6c5b7b;
+      margin-bottom: 15px;
+    }
+
+    .legend-box {
+      text-align: left;
+      background: #fff;
+      border: 3px solid var(--pastel-purple);
+      padding: 14px;
+      border-radius: 15px;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+
+    .legend-box div { margin-bottom: 8px; }
+
+    button {
+      background: #ff8b94;
+      color: #fff;
+      border: none;
+      padding: 14px 36px;
+      font-size: 1.2rem;
+      font-weight: bold;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 6px 0 #e0636c;
+      transition: all 0.15s ease;
+    }
+
+    button:hover {
+      background: #ff6b8b;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 0 #e0636c;
+    }
+
+    button:active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 #e0636c;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-wrapper">
+    <canvas id="canvas" width="800" height="550"></canvas>
+
+    <div class="controls-hint">
+      <span><span class="key">←</span> <span class="key">→</span> Mover o Node-Cat</span>
+      <span><span class="key">ESPAÇO</span> Docinho: <code>200 OK</code> 💖</span>
+      <span><span class="key">X</span> / <span class="key">SHIFT</span> Estrelinha: <code>404 / 429</code> ⭐</span>
+    </div>
+
+    <div class="modal-overlay" id="modal">
+      <h1 id="modal-title">🐾 NODE-CAT BISTRO 🎀</h1>
+      <p id="modal-desc">Oie! Ajude o gatinho servidor a entregar os pedidos de doces e proteger o bistrô de spams travessos!</p>
+      
+      <div class="legend-box">
+        <div><strong style="color:#ff6b8b">🧁 PEDIDOS FOFOS (GET /boba, POST /donut):</strong> Responda com docinho <span class="key">ESPAÇO</span> (200 OK).</div>
+        <div><strong style="color:#e6a100">🐛 INSETINHOS / ESTRANHOS (GET /bug):</strong> Bloqueie com <span class="key">X</span> (404 Not Found).</div>
+        <div><strong style="color:#d9534f">🐕 SPAM TRAVESSO (DDoS ATTACK):</strong> Proteja com estrelinha <span class="key">X</span> (429 Rate Limit).</div>
+      </div>
+
+      <button id="start-btn" onclick="initGame()">ABRIR BISTRÔ 🐱</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Web Audio Synthesizer (Sons Kawaii)
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playKawaiiSound(type) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+
+      if (type === 'shoot_200') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.08);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+        osc.start(now); osc.stop(now + 0.08);
+      } else if (type === 'shoot_block') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(500, now);
+        osc.frequency.exponentialRampToValueAtTime(900, now + 0.1);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now); osc.stop(now + 0.1);
+      } else if (type === 'pop') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, now);
+        osc.frequency.exponentialRampToValueAtTime(1600, now + 0.12);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+        osc.start(now); osc.stop(now + 0.12);
+      } else if (type === 'hurt') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.linearRampToValueAtTime(150, now + 0.2);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.start(now); osc.stop(now + 0.2);
+      }
+    }
+
+    // Game Variables
+    let gameLoopId;
+    let isPlaying = false;
+    let score = 0;
+    let happiness = 100;
+    let frameCount = 0;
+
+    // Node-Cat Player
+    const player = {
+      x: canvas.width / 2 - 40,
+      y: canvas.height - 65,
+      width: 80,
+      height: 50,
+      speed: 7
+    };
+
+    let bullets = [];
+    let requests = [];
+    let particles = [];
+    let floatingTexts = [];
+
+    // Keyboard state
+    const keys = {};
+    window.addEventListener('keydown', e => {
+      keys[e.code] = true;
+      if (e.code === 'Space' && isPlaying) {
+        fireBullet('200_OK');
+        e.preventDefault();
+      }
+      if ((e.code === 'KeyX' || e.shiftKey) && isPlaying) {
+        fireBullet('BLOCK_404_429');
+        e.preventDefault();
+      }
+    });
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    function fireBullet(type) {
+      bullets.push({
+        x: player.x + player.width / 2 - 10,
+        y: player.y,
+        size: 20,
+        speed: 10,
+        type: type
+      });
+      playKawaiiSound(type === '200_OK' ? 'shoot_200' : 'shoot_block');
+    }
+
+    function spawnRequest() {
+      const types = [
+        { label: '🧁 GET /boba', icon: '🧋', cat: 'valid', color: '#ffb7b2' },
+        { label: '🍩 POST /donut', icon: '🍩', cat: 'valid', color: '#ffb7b2' },
+        { label: '🐛 GET /bug', icon: '🐛', cat: 'scanner', color: '#ffdac1' },
+        { label: '🐕 SPAM FLOOD', icon: '🐾', cat: 'ddos', color: '#ff9aa2' }
+      ];
+      const selected = types[Math.floor(Math.random() * types.length)];
+      
+      requests.push({
+        x: Math.random() * (canvas.width - 130) + 10,
+        y: -40,
+        width: 120,
+        height: 38,
+        speed: 1.2 + Math.random() * 1.5 + (score / 600),
+        label: selected.label,
+        icon: selected.icon,
+        cat: selected.cat,
+        color: selected.color
+      });
+    }
+
+    function createKawaiiParticles(x, y, symbol) {
+      for (let i = 0; i < 6; i++) {
+        particles.push({
+          x: x, y: y,
+          vx: (Math.random() - 0.5) * 5,
+          vy: (Math.random() - 0.5) * 5 - 2,
+          life: 25,
+          symbol: symbol || '✨'
+        });
+      }
+    }
+
+    function addFloatingText(txt, x, y, color) {
+      floatingTexts.push({ txt, x, y, color, life: 35 });
+    }
+
+    function initGame() {
+      score = 0;
+      happiness = 100;
+      bullets = [];
+      requests = [];
+      particles = [];
+      floatingTexts = [];
+      isPlaying = true;
+      document.getElementById('modal').style.display = 'none';
+
+      if (gameLoopId) cancelAnimationFrame(gameLoopId);
+      gameLoop();
+    }
+
+    function gameOver() {
+      isPlaying = false;
+      playKawaiiSound('hurt');
+      document.getElementById('modal-title').innerText = '😿 NHOO! SERVIDOR CANSOU';
+      document.getElementById('modal-title').style.color = '#ff6b8b';
+      document.getElementById('modal-desc').innerHTML = `O gatinho ficou sobrecarregado!<br><br><strong>Docinhos Servidos:</strong> ${score} pts 💖`;
+      document.getElementById('start-btn').innerText = 'TENTAR NOVAMENTE 🐾';
+      document.getElementById('modal').style.display = 'flex';
+    }
+
+    // Desenha o Node-Cat fofo em Canvas 2D puro
+    function drawNodeCat(x, y) {
+      ctx.save();
+      // Corpo / Cabeça (Retângulo arredondado)
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#ffb7b2';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.roundRect(x, y, 80, 50, 20);
+      ctx.fill();
+      ctx.stroke();
+
+      // Orelhinhas
+      ctx.fillStyle = '#ffb7b2';
+      ctx.beginPath();
+      ctx.moveTo(x + 10, y);
+      ctx.lineTo(x + 22, y - 14);
+      ctx.lineTo(x + 34, y);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(x + 46, y);
+      ctx.lineTo(x + 58, y - 14);
+      ctx.lineTo(x + 70, y);
+      ctx.fill();
+
+      // Olhos fofos (• ω •)
+      ctx.fillStyle = '#6c5b7b';
+      ctx.beginPath();
+      ctx.arc(x + 26, y + 22, 4, 0, Math.PI * 2);
+      ctx.arc(x + 54, y + 22, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bochechas rosadinhas
+      ctx.fillStyle = '#ff8b94';
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(x + 18, y + 28, 6, 0, Math.PI * 2);
+      ctx.arc(x + 62, y + 28, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      // Fucinho 3
+      ctx.strokeStyle = '#6c5b7b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x + 36, y + 28, 3, 0, Math.PI);
+      ctx.arc(x + 44, y + 28, 3, 0, Math.PI);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // Main Game Loop
+    function gameLoop() {
+      if (!isPlaying) return;
+
+      frameCount++;
+      if (frameCount % 50 === 0) spawnRequest();
+
+      // Clear Canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Player Movement
+      if (keys['ArrowLeft'] || keys['KeyA']) player.x -= player.speed;
+      if (keys['ArrowRight'] || keys['KeyD']) player.x += player.speed;
+      player.x = Math.max(10, Math.min(canvas.width - player.width - 10, player.x));
+
+      // Draw Cat
+      drawNodeCat(player.x, player.y);
+
+      // Bullets (💖 ou ⭐)
+      bullets.forEach((b, i) => {
+        b.y -= b.speed;
+        ctx.font = '20px sans-serif';
+        ctx.fillText(b.type === '200_OK' ? '💖' : '⭐', b.x, b.y);
+
+        if (b.y < -20) bullets.splice(i, 1);
+      });
+
+      // Requests (Sobremesas / Insetos)
+      requests.forEach((r, rIdx) => {
+        r.y += r.speed;
+
+        // Card do Pedido
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = r.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(r.x, r.y, r.width, r.height, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#6c5b7b';
+        ctx.font = 'bold 12px Fredoka, sans-serif';
+        ctx.fillText(`${r.icon} ${r.label}`, r.x + 8, r.y + 24);
+
+        // Colisão com Projéteis
+        bullets.forEach((b, bIdx) => {
+          if (b.x < r.x + r.width && b.x + b.size > r.x &&
+              b.y < r.y + r.height && b.y + b.size > r.y) {
+            
+            let hitSuccess = false;
+            if (b.type === '200_OK' && r.cat === 'valid') {
+              hitSuccess = true;
+              score += 50;
+              addFloatingText('200 OK! 💖', r.x, r.y, '#ff6b8b');
+              createKawaiiParticles(r.x + r.width/2, r.y, '💖');
+            } else if (b.type === 'BLOCK_404_429' && (r.cat === 'scanner' || r.cat === 'ddos')) {
+              hitSuccess = true;
+              score += 75;
+              addFloatingText(r.cat === 'scanner' ? '404 BLOCK! ⭐' : '429 PROTECT! 🛡️', r.x, r.y, '#ffb7b2');
+              createKawaiiParticles(r.x + r.width/2, r.y, '⭐');
+            }
+
+            if (hitSuccess) {
+              playKawaiiSound('pop');
+              requests.splice(rIdx, 1);
+              bullets.splice(bIdx, 1);
+            } else {
+              playKawaiiSound('hurt');
+              happiness -= 8;
+              addFloatingText('OPS! 500 😿', r.x, r.y, '#ff6b8b');
+              bullets.splice(bIdx, 1);
+              if (happiness <= 0) gameOver();
+            }
+          }
+        });
+
+        // Chegou ao fim da tela (Pedido esquecido)
+        if (r.y > canvas.height) {
+          requests.splice(rIdx, 1);
+          happiness -= (r.cat === 'ddos' ? 18 : 10);
+          playKawaiiSound('hurt');
+          addFloatingText('PERDEU PEDIDO! 😿', r.x, canvas.height - 40, '#ff6b8b');
+          if (happiness <= 0) gameOver();
+        }
+      });
+
+      // Partículas
+      particles.forEach((p, i) => {
+        p.x += p.vx; p.y += p.vy; p.life--;
+        ctx.font = '14px sans-serif';
+        ctx.fillText(p.symbol, p.x, p.y);
+        if (p.life <= 0) particles.splice(i, 1);
+      });
+
+      // Textos Flutuantes
+      floatingTexts.forEach((ft, i) => {
+        ft.y -= 1; ft.life--;
+        ctx.fillStyle = ft.color;
+        ctx.font = 'bold 14px Fredoka, sans-serif';
+        ctx.fillText(ft.txt, ft.x, ft.y);
+        if (ft.life <= 0) floatingTexts.splice(i, 1);
+      });
+
+      // HUD Fofinho
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.roundRect(10, 10, canvas.width - 20, 40, 15);
+      ctx.fill();
+
+      ctx.fillStyle = '#ff6b8b';
+      ctx.font = 'bold 15px Fredoka, sans-serif';
+      ctx.fillText(`💖 DOCINHOS: ${score}`, 25, 35);
+      ctx.fillText(`🐾 FELICIDADE DO SERVIDOR: ${Math.max(0, happiness)}%`, 260, 35);
+      ctx.fillText(`✨ PEDIDOS: ${requests.length}`, 630, 35);
+
+      gameLoopId = requestAnimationFrame(gameLoop);
+    }
+  </script>
+</body>
+</html>
